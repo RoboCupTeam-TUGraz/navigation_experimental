@@ -37,6 +37,7 @@
 
 #include <sbpl_recovery/sbpl_recovery.h>
 #include <pluginlib/class_list_macros.h>
+#include <algorithm>
 
 PLUGINLIB_DECLARE_CLASS(sbpl_recovery, SBPLRecovery, sbpl_recovery::SBPLRecovery,
     nav_core::RecoveryBehavior)
@@ -98,8 +99,7 @@ namespace sbpl_recovery
     tf::Stamped<tf::Pose> global_pose;
     !local_costmap_->getRobotPose(global_pose);
 
-    costmap_2d::Costmap2D costmap;
-    local_costmap_->getCostmapCopy(costmap);
+    costmap_2d::Costmap2D costmap = *local_costmap_->getCostmap();
 
     if(use_local_frame_)
     {
@@ -198,6 +198,24 @@ namespace sbpl_recovery
     return sbpl_plan;
   }
 
+  void SBPLRecovery::clearNonLethalWindow(costmap_2d::Costmap2DROS* costmap, double x_size, double y_size)
+  {
+      unsigned int x_size_int = std::min(static_cast<unsigned int>(std::ceil(x_size / costmap->getCostmap()->getResolution())), costmap->getCostmap()->getSizeInCellsX());
+      unsigned int y_size_int = std::min(static_cast<unsigned int>(std::ceil(y_size / costmap->getCostmap()->getResolution())), costmap->getCostmap()->getSizeInCellsY());
+
+    for (unsigned int x = 0; x < x_size_int; ++x)
+    {
+      for (unsigned int y = 0; y < y_size_int; ++y)
+      {
+        if (costmap->getCostmap()->getCost(x, y) < costmap_2d::LETHAL_OBSTACLE)
+        {
+          costmap->getCostmap()->setCost(x,y,costmap_2d::FREE_SPACE);
+        }
+      }
+    }
+  }
+
+
   void SBPLRecovery::runBehavior()
   {
     if(!initialized_)
@@ -221,8 +239,8 @@ namespace sbpl_recovery
       //if we've got a valid plan, we're going to clear unknown space out to our planning distance
       //in our costmaps, not the safest thing to do, but we're trying to get out
       double window_size = 2 * sqrt(sq_planning_distance_);
-      global_costmap_->clearNonLethalWindow(window_size, window_size);
-      local_costmap_->clearNonLethalWindow(window_size, window_size);
+      clearNonLethalWindow(global_costmap_, window_size, window_size);
+      clearNonLethalWindow(local_costmap_, window_size, window_size);
 
       //ok... now we've got a plan so we need to try to follow it
       local_planner_.setPlan(sbpl_plan);

@@ -66,6 +66,7 @@ namespace sbpl_recovery
       double sqDistance(const geometry_msgs::PoseStamped& p1, 
           const geometry_msgs::PoseStamped& p2);
       std::vector<geometry_msgs::PoseStamped> makePlan();
+      void clearNonLethalWindow(costmap_2d::Costmap2DROS* costmap, double x_size, double y_size);
 
       costmap_2d::Costmap2DROS* global_costmap_;
       costmap_2d::Costmap2DROS* local_costmap_;

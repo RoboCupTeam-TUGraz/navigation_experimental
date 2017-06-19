@@ -64,6 +64,8 @@ private:
                     const geometry_msgs::PoseStamped& start, 
                     const geometry_msgs::PoseStamped& goal);
 
+  void clearRobotFootprint();
+
   bool initialized_;
 
   SBPLPlanner* planner_;
@@ -87,7 +89,6 @@ private:
 
 
   costmap_2d::Costmap2DROS* costmap_ros_; /**< manages the cost map for us */
-  costmap_2d::Costmap2D cost_map_;        /**< local copy of the costmap underlying cost_map_ros_ */
 
   ros::Publisher plan_pub_;
   ros::Publisher stats_publisher_;

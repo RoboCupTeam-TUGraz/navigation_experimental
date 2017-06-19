@@ -19,10 +19,11 @@ set(THIS_PACKAGE_ROS_DEPS
   pluginlib
   sensor_msgs
   filters
+  cmake_modules
 )
 
 find_package(catkin REQUIRED COMPONENTS ${THIS_PACKAGE_ROS_DEPS})
-find_package(Eigen REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${Eigen_INCLUDE_DIRS})
 link_directories(${catkin_LIBRARY_DIRS} ${Eigen_LIBRARY_DIRS})
@@ -35,7 +36,7 @@ message("Assisted telop catkin_LIBRARY_DIRS: " ${catkin_LIBRARY_DIRS})
 catkin_package(
   INCLUDE_DIRS include
   CATKIN_DEPENDS ${THIS_PACKAGE_ROS_DEPS}
-  DEPENDS Eigen
+  DEPENDS Eigen3
 )
 
 ##############################################################################
