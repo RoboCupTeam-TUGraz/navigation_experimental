@@ -97,6 +97,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     private_nh.param("environment_type", environment_type_, string("XYThetaLattice"));
     private_nh.param("forward_search", forward_search_, bool(false));
     private_nh.param("primitive_filename",primitive_filename_,string(""));
+    ROS_ERROR_STREAM("primitive_filename: " << primitive_filename_);
     private_nh.param("force_scratch_limit",force_scratch_limit_,500);
 
     double nominalvel_mpersecs, timetoturn45degsinplace_secs;
@@ -146,7 +147,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     try{
       ret = env_->InitializeEnv(costmap_ros_->getCostmap()->getSizeInCellsX(), // width
                                 costmap_ros_->getCostmap()->getSizeInCellsY(), // height
-                                0, // mapdata
+                                NULL, // mapdata
                                 0, 0, 0, // start (x, y, theta, t)
                                 0, 0, 0, // goal (x, y, theta)
                                 0, 0, 0, //goal tolerance
@@ -155,7 +156,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
                                 primitive_filename_.c_str());
     }
     catch(SBPL_Exception e){
-      ROS_ERROR("SBPL encountered a fatal exception!");
+      ROS_ERROR_STREAM("SBPL encountered a fatal exception!" << e.what());
       ret = false;
     }
     if(!ret){
