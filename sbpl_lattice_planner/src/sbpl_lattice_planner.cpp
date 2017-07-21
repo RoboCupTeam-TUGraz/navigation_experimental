@@ -97,7 +97,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     private_nh.param("environment_type", environment_type_, string("XYThetaLattice"));
     private_nh.param("forward_search", forward_search_, bool(false));
     private_nh.param("primitive_filename",primitive_filename_,string(""));
-    ROS_ERROR_STREAM("primitive_filename: " << primitive_filename_);
+    ROS_INFO_STREAM("primitive_filename: " << primitive_filename_);
     private_nh.param("force_scratch_limit",force_scratch_limit_,500);
 
     double nominalvel_mpersecs, timetoturn45degsinplace_secs;
