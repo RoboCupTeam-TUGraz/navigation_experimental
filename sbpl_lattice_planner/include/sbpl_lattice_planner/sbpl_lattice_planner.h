@@ -95,6 +95,8 @@ private:
   
   std::vector<geometry_msgs::Point> footprint_;
 
+  double min_euclidian_distance_;
+
 };
 };
 

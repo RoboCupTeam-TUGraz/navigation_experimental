@@ -39,6 +39,7 @@
 #include <pluginlib/class_list_macros.h>
 #include <nav_msgs/Path.h>
 #include <sbpl_lattice_planner/SBPLLatticePlannerStats.h>
+#include <math.h>
 
 using namespace std;
 using namespace ros;
@@ -78,17 +79,17 @@ SBPLLatticePlanner::SBPLLatticePlanner()
   : initialized_(false), costmap_ros_(NULL){
 }
 
-SBPLLatticePlanner::SBPLLatticePlanner(std::string name, costmap_2d::Costmap2DROS* costmap_ros) 
+SBPLLatticePlanner::SBPLLatticePlanner(std::string name, costmap_2d::Costmap2DROS* costmap_ros)
   : initialized_(false), costmap_ros_(NULL){
   initialize(name, costmap_ros);
 }
 
-    
+
 void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros){
   if(!initialized_){
     ros::NodeHandle private_nh("~/"+name);
     ros::NodeHandle nh(name);
-    
+
     ROS_INFO("Name is %s", name.c_str());
 
     private_nh.param("planner_type", planner_type_, string("ARAPlanner"));
@@ -103,6 +104,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     double nominalvel_mpersecs, timetoturn45degsinplace_secs;
     private_nh.param("nominalvel_mpersecs", nominalvel_mpersecs, 0.4);
     private_nh.param("timetoturn45degsinplace_secs", timetoturn45degsinplace_secs, 0.6);
+    private_nh.param("min_euclidian_distance", min_euclidian_distance_, 0.2);
 
     int lethal_obstacle;
     private_nh.param("lethal_obstacle",lethal_obstacle,20);
@@ -110,7 +112,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     inscribed_inflated_obstacle_ = lethal_obstacle_-1;
     sbpl_cost_multiplier_ = (unsigned char) (costmap_2d::INSCRIBED_INFLATED_OBSTACLE/inscribed_inflated_obstacle_ + 1);
     ROS_DEBUG("SBPL: lethal: %uz, inscribed inflated: %uz, multiplier: %uz",lethal_obstacle,inscribed_inflated_obstacle_,sbpl_cost_multiplier_);
-    
+
     costmap_ros_ = costmap_ros;
     clearRobotFootprint();
 
@@ -183,11 +185,11 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     ROS_INFO("[sbpl_lattice_planner] Initialized successfully");
     plan_pub_ = private_nh.advertise<nav_msgs::Path>("plan", 1);
     stats_publisher_ = private_nh.advertise<sbpl_lattice_planner::SBPLLatticePlannerStats>("sbpl_lattice_planner_stats", 1);
-    
+
     initialized_ = true;
   }
 }
-  
+
 //Taken from Sachin's sbpl_cart_planner
 //This rescales the costmap according to a rosparam which sets the obstacle cost
 unsigned char SBPLLatticePlanner::costMapCostToSBPLCost(unsigned char newcost){
@@ -201,8 +203,8 @@ unsigned char SBPLLatticePlanner::costMapCostToSBPLCost(unsigned char newcost){
     return (unsigned char) (newcost/sbpl_cost_multiplier_ + 0.5);
 }
 
-void SBPLLatticePlanner::publishStats(int solution_cost, int solution_size, 
-                                      const geometry_msgs::PoseStamped& start, 
+void SBPLLatticePlanner::publishStats(int solution_cost, int solution_size,
+                                      const geometry_msgs::PoseStamped& start,
                                       const geometry_msgs::PoseStamped& goal){
   // Fill up statistics and publish
   sbpl_lattice_planner::SBPLLatticePlannerStats stats;
@@ -265,7 +267,7 @@ bool SBPLLatticePlanner::makePlan(const geometry_msgs::PoseStamped& start,
     ROS_ERROR("SBPL encountered a fatal exception while setting the goal state");
     return false;
   }
-  
+
   int offOnCount = 0;
   int onOffCount = 0;
   int allCount = 0;
@@ -350,14 +352,13 @@ bool SBPLLatticePlanner::makePlan(const geometry_msgs::PoseStamped& start,
     return false;
   }
   ROS_DEBUG("Plan has %d points.\n", (int)sbpl_path.size());
-  ros::Time plan_time = ros::Time::now();
 
-  //create a message for the plan 
-  nav_msgs::Path gui_path;
-  gui_path.poses.resize(sbpl_path.size());
-  gui_path.header.frame_id = costmap_ros_->getGlobalFrameID();
-  gui_path.header.stamp = plan_time;
-  for(unsigned int i=0; i<sbpl_path.size(); i++){
+  ros::Time plan_time = ros::Time::now();
+  // check if the path can be shortened
+  // first calculate the distance of each point relative to the start of the path
+  std::vector<std::pair<double, geometry_msgs::PoseStamped> > path_with_absolut_distance;
+  for (unsigned int i = 0; i < sbpl_path.size(); ++i)
+  {
     geometry_msgs::PoseStamped pose;
     pose.header.stamp = plan_time;
     pose.header.frame_id = costmap_ros_->getGlobalFrameID();
@@ -366,19 +367,68 @@ bool SBPLLatticePlanner::makePlan(const geometry_msgs::PoseStamped& start,
     pose.pose.position.y = sbpl_path[i].y + costmap_ros_->getCostmap()->getOriginY();
     pose.pose.position.z = start.pose.position.z;
 
-    tf::Quaternion temp;
-    temp.setRPY(0,0,sbpl_path[i].theta);
-    pose.pose.orientation.x = temp.getX();
-    pose.pose.orientation.y = temp.getY();
-    pose.pose.orientation.z = temp.getZ();
-    pose.pose.orientation.w = temp.getW();
+    pose.pose.orientation = tf::createQuaternionMsgFromYaw(sbpl_path[i].theta);
 
-    plan.push_back(pose);
+    if (i == 0)
+    {
+      path_with_absolut_distance.push_back(std::make_pair(0.0, pose));
+    }
+    else
+    {
+      const geometry_msgs::PoseStamped previous_pose = path_with_absolut_distance[i - 1].second;
+      const double previous_distance = path_with_absolut_distance[i - 1].first;
 
-    gui_path.poses[i].pose.position.x = plan[i].pose.position.x;
-    gui_path.poses[i].pose.position.y = plan[i].pose.position.y;
-    gui_path.poses[i].pose.position.z = plan[i].pose.position.z;
+      double distance = previous_distance +
+        sqrt(std::pow(pose.pose.position.x - previous_pose.pose.position.x, 2.0) +
+                  std::pow(pose.pose.position.y - previous_pose.pose.position.y, 2.0));
+
+      path_with_absolut_distance.push_back(std::make_pair(distance, pose));
+    }
   }
+  // create a path by removing those parts which are "far" away in the path distance but close in euclidan sense
+  for (size_t i = 0; i < path_with_absolut_distance.size(); ++i)
+  {
+    const geometry_msgs::PoseStamped current_pose = path_with_absolut_distance[i].second;
+    const double current_path_distance = path_with_absolut_distance[i].first;
+
+    if (i > 0)
+    {
+      bool should_remove_elements = false;
+      size_t start_index_of_removel = 0;
+
+      for (size_t j = 0; j < plan.size(); ++j)
+      {
+        const geometry_msgs::PoseStamped previous_pose = path_with_absolut_distance[j].second;
+        const double previous_distance = path_with_absolut_distance[j].first;
+
+        if (std::abs(current_path_distance - previous_distance) <= min_euclidian_distance_)
+          continue; //skip elements which are close in the path
+
+        double euclidian_distance = sqrt(std::pow(current_pose.pose.position.x - previous_pose.pose.position.x, 2.0) +
+                                         std::pow(current_pose.pose.position.y - previous_pose.pose.position.y, 2.0));
+
+        if (euclidian_distance < min_euclidian_distance_)
+        {
+          start_index_of_removel = j;
+          should_remove_elements = true;
+          break;
+        }
+      }
+
+      if (should_remove_elements)
+        plan.erase(plan.begin() + start_index_of_removel,
+                   plan.begin() + plan.size() - 1);
+    }
+
+    plan.push_back(current_pose);
+  }
+
+  //create a message for the plan 
+  nav_msgs::Path gui_path;
+  gui_path.poses.resize(sbpl_path.size());
+  gui_path.header.frame_id = costmap_ros_->getGlobalFrameID();
+  gui_path.header.stamp = plan_time;
+  gui_path.poses = plan;
   plan_pub_.publish(gui_path);
   publishStats(solution_cost, sbpl_path.size(), start, goal);
 
