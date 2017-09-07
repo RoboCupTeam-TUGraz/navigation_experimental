@@ -46,14 +46,14 @@ catkin_package(
 add_executable(assisted_teleop src/assisted_teleop.cpp)
 target_link_libraries(assisted_teleop trajectory_planner_ros ${catkin_LIBRARIES} ${Eigen_LIBRARIES})
 
-add_library(laser_scan_filters src/laser_scan_filters.cpp)
-target_link_libraries(laser_scan_filters ${catkin_LIBRARIES} ${Eigen_LIBRARIES})
+add_library(liblaser_scan_max_range_filter src/laser_scan_filters.cpp)
+target_link_libraries(liblaser_scan_max_range_filter ${catkin_LIBRARIES} ${Eigen_LIBRARIES})
 
 ##############################################################################
 # Install
 ##############################################################################
 
-install(TARGETS assisted_teleop laser_scan_filters
+install(TARGETS assisted_teleop liblaser_scan_max_range_filter
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
