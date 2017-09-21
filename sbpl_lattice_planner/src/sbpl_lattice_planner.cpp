@@ -105,6 +105,7 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     private_nh.param("nominalvel_mpersecs", nominalvel_mpersecs, 0.4);
     private_nh.param("timetoturn45degsinplace_secs", timetoturn45degsinplace_secs, 0.6);
     private_nh.param("min_euclidian_distance", min_euclidian_distance_, 0.2);
+    private_nh.param("goal_tolerance", goal_tolerance_, 0.0);
 
     int lethal_obstacle;
     private_nh.param("lethal_obstacle",lethal_obstacle,20);
@@ -258,6 +259,7 @@ bool SBPLLatticePlanner::makePlan(const geometry_msgs::PoseStamped& start,
 
   try{
     int ret = env_->SetGoal(goal.pose.position.x - costmap_ros_->getCostmap()->getOriginX(), goal.pose.position.y - costmap_ros_->getCostmap()->getOriginY(), theta_goal);
+    env_->SetGoalTolerance(goal_tolerance_, goal_tolerance_, M_PI);
     if(ret < 0 || planner_->set_goal(ret) == 0){
       ROS_ERROR("ERROR: failed to set goal state\n");
       return false;

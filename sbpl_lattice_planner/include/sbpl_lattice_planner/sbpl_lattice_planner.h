@@ -97,6 +97,7 @@ private:
 
   double min_euclidian_distance_;
 
+  double goal_tolerance_;
 };
 };
 
