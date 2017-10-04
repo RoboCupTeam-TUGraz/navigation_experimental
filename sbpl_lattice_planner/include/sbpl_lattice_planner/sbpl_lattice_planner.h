@@ -53,7 +53,7 @@ public:
    * @return True if a valid plan was found, false otherwise
    */
   virtual bool makePlan(const geometry_msgs::PoseStamped& start, 
-                        const geometry_msgs::PoseStamped& goal, 
+                        const geometry_msgs::PoseStamped& planner_goal,
                         std::vector<geometry_msgs::PoseStamped>& plan);
 
   virtual ~SBPLLatticePlanner(){};
@@ -65,6 +65,14 @@ private:
                     const geometry_msgs::PoseStamped& goal);
 
   void clearRobotFootprint();
+
+  bool positionInCollision(const geometry_msgs::Pose& pose);
+
+  bool positionInCollision(const geometry_msgs::Point& position);
+
+  bool findOrthogonalGoal(const geometry_msgs::Pose& goal_pose, geometry_msgs::Pose& new_goal_pose);
+
+  geometry_msgs::Pose calcPose(const geometry_msgs::Pose& pose, double distance, double angular);
 
   bool initialized_;
 
@@ -98,6 +106,11 @@ private:
   double min_euclidian_distance_;
 
   double goal_tolerance_;
+
+  bool use_orthogonal_goals_;
+  double orthogonal_step_size_;
+  double max_orthogonal_distance_;
+
 };
 };
 

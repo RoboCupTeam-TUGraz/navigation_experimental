@@ -107,6 +107,10 @@ void SBPLLatticePlanner::initialize(std::string name, costmap_2d::Costmap2DROS* 
     private_nh.param("min_euclidian_distance", min_euclidian_distance_, 0.2);
     private_nh.param("goal_tolerance", goal_tolerance_, 0.0);
 
+    private_nh.param("use_orthogonal_goals", use_orthogonal_goals_, false);
+    private_nh.param("orthogonal_step_size", orthogonal_step_size_, 0.1);
+    private_nh.param("max_orthogonal_distance", max_orthogonal_distance_, 2.0);
+
     int lethal_obstacle;
     private_nh.param("lethal_obstacle",lethal_obstacle,20);
     lethal_obstacle_ = (unsigned char) lethal_obstacle;
@@ -227,7 +231,7 @@ void SBPLLatticePlanner::publishStats(int solution_cost, int solution_size,
 }
 
 bool SBPLLatticePlanner::makePlan(const geometry_msgs::PoseStamped& start,
-                                 const geometry_msgs::PoseStamped& goal,
+                                 const geometry_msgs::PoseStamped& planner_goal,
                                  std::vector<geometry_msgs::PoseStamped>& plan){
   if(!initialized_){
     ROS_ERROR("Global planner is not initialized");
@@ -239,6 +243,31 @@ bool SBPLLatticePlanner::makePlan(const geometry_msgs::PoseStamped& start,
   ROS_DEBUG("[sbpl_lattice_planner] getting fresh copy of costmap");
   clearRobotFootprint();
   ROS_DEBUG("[sbpl_lattice_planner] robot footprint cleared");
+
+  geometry_msgs::PoseStamped goal;
+  goal = planner_goal;
+
+  if (positionInCollision(goal.pose))
+  {
+    if (!use_orthogonal_goals_)
+    {
+      ROS_WARN("goal is in collision no plan can be found");
+      return false;
+    }
+
+    ROS_INFO("goal is in collision use orthogonal goal");
+
+    geometry_msgs::Pose new_goal_pose;
+    if (findOrthogonalGoal(goal.pose, new_goal_pose))
+    {
+      goal.pose = new_goal_pose;
+    }
+    else
+    {
+      ROS_WARN("no orthogonal goals possible no plan can be found");
+      return false;
+    }
+  }
 
   ROS_INFO("[sbpl_lattice_planner] getting start point (%g,%g) goal point (%g,%g)",
            start.pose.position.x, start.pose.position.y,goal.pose.position.x, goal.pose.position.y);
@@ -453,4 +482,55 @@ void SBPLLatticePlanner::clearRobotFootprint()
 
   costmap_ros_->getCostmap()->setConvexPolygonCost(polygon_to_clear, costmap_2d::FREE_SPACE);
 }
+
+bool SBPLLatticePlanner::positionInCollision(const geometry_msgs::Pose &pose)
+{
+  return positionInCollision(pose.position);
+}
+
+bool SBPLLatticePlanner::positionInCollision(const geometry_msgs::Point &position)
+{
+  int map_x;
+  int map_y;
+  costmap_ros_->getCostmap()->worldToMapEnforceBounds(position.x, position.y, map_x, map_y);
+
+  const unsigned char costs = costmap_ros_->getCostmap()->getCost(map_x, map_y);
+  return ((costs == costmap_2d::LETHAL_OBSTACLE) || (costs == costmap_2d::INSCRIBED_INFLATED_OBSTACLE));
+}
+
+bool SBPLLatticePlanner::findOrthogonalGoal(const geometry_msgs::Pose& goal_pose, geometry_msgs::Pose& new_goal_pose)
+{
+  const double goal_angular = tf::getYaw(goal_pose.orientation);
+  const double plus_orthognal_angular = goal_angular + M_PI_2;
+  const double minus_orthognal_angular = goal_angular - M_PI_2;
+
+  for (double distance = 0.; distance < max_orthogonal_distance_; distance += orthogonal_step_size_)
+  {
+    new_goal_pose = calcPose(goal_pose, distance, plus_orthognal_angular);
+    if (!positionInCollision(new_goal_pose))
+      return true;
+
+    new_goal_pose = calcPose(goal_pose, distance, minus_orthognal_angular);
+    if (!positionInCollision(new_goal_pose))
+      return true;
+  }
+
+  new_goal_pose = goal_pose;
+  return false;
+}
+
+geometry_msgs::Pose SBPLLatticePlanner::calcPose(const geometry_msgs::Pose& pose, double distance, double angular)
+{
+  geometry_msgs::Pose resulting_pose;
+  resulting_pose.orientation = pose.orientation;
+
+  resulting_pose.position.z = pose.position.z;
+
+  resulting_pose.position.x = pose.position.x + distance * std::cos(angular);
+  resulting_pose.position.y = pose.position.y + distance * std::sin(angular);
+
+  return resulting_pose;
+}
+
+
 };
